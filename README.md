@@ -1,6 +1,6 @@
 # In-materia speech recognition
 
-Simple overview of use/purpose.
+<!-- Simple overview of use/purpose. -->
 
 ## Description
 
@@ -33,9 +33,8 @@ command to run if program contains helper info
 
 ## Authors
 
-
-Mohamadreza Zolfagharinejad 
-[GitHub@Mamrez](m.zolfagharinejad@utwente.nl)
+Mohamadreza Zolfagharinejad -- University of Twente
+(m.zolfagharinejad@utwente.nl)
 
 ## Version History
 
@@ -43,9 +42,9 @@ Mohamadreza Zolfagharinejad
 * 0.1
     * Initial Release
 
-## License
+<!-- ## License -->
 
-This project is licensed under the [NAME HERE] License - see the LICENSE.md file for details
+<!-- This project is licensed under the [NAME HERE] License - see the LICENSE.md file for details -->
 
 <!-- ## Acknowledgments
 
