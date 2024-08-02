@@ -319,7 +319,5 @@ if __name__ == "__main__":
         model.to(device),
         num_epochs      = 500,
         train_loader    = train_loader,
-        test_loader     = test_loader,
-        save            = False,
-        DNPU_train_enabled = False
+        test_loader     = test_loader
     )
