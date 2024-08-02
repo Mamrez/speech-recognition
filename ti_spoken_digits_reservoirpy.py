@@ -183,7 +183,6 @@ def train(
         train_loader,
         test_loader,
         save = True,
-        DNPU_train_enabled = True
 ):
     LOSS = []
     accuracies = [0]
@@ -227,8 +226,6 @@ def train(
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-                # clamping DNPU control voltages
-                # DNPUControlVoltageClamp(model, -0.30, 0.30)
                 current_loss += loss.item()
                 tepoch.set_postfix(
                     loss = current_loss / (i + 1),
@@ -318,7 +315,6 @@ if __name__ == "__main__":
         drop_last   = True
     )
 
-    
     _ = train (
         model.to(device),
         num_epochs      = 500,
