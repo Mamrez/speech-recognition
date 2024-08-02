@@ -2,14 +2,12 @@ import scipy.signal
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import matplotlib.pyplot as plt
 import numpy as np
 
 import tqdm
 import scipy
 from scipy.signal import gammatone, sosfilt
 import librosa
-from librosa import display
 import os
 import sklearn
 import random
@@ -22,20 +20,13 @@ from tqdm import tqdm
 from itertools import chain
 from torch.utils.data import Dataset, DataLoader
 
-from scipy.signal import hilbert, chirp
-
-from brainspy.utils.manager import get_driver
-from brainspy.utils.io import load_configs
-
 from reservoirpy.nodes import Reservoir, Ridge
 from reservoirpy import set_seed
 
 import random
 
-import matplotlib
-matplotlib.use('TkAgg')
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def butter_lowpass(cutoff, order, fs):
     return scipy.signal.butter( N = order, 
@@ -156,18 +147,6 @@ class AudioDataset(Dataset):
             return data, label
         else:
             return self.audios[index], self.labels[index]
-
-class OnlyLinearLayer(nn.Module):
-    def __init__(self) -> None:
-        super(OnlyLinearLayer, self).__init__()
-        # self.ln = nn.LayerNorm(971)  # 62144
-        self.ln = nn.LazyBatchNorm1d()
-        # self.linear_layer = nn.Linear(971, 10)
-        self.linear_layer = nn.LazyLinear(10)
-    def forward(self, x):
-        x = self.ln(x)
-        x = self.linear_layer(x)
-        return F.log_softmax(x, dim=1)
 
 class ConvNet(nn.Module):
     def __init__(self, n_input = 1, n_output=10, n_channel = 32):
@@ -304,9 +283,6 @@ if __name__ == "__main__":
         same_size_audios    = "MAX",
     )
 
-    # reservoir_ridge(audios, labels)
-
-    # model = OnlyLinearLayer()
     model = ConvNet(n_input=64)
     print("Number of learnable params: ", sum(p.numel() for p in model.parameters() if p.requires_grad))
 
@@ -351,5 +327,3 @@ if __name__ == "__main__":
         save            = False,
         DNPU_train_enabled = False
     )
-
-    print("hi")
