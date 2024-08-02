@@ -13,8 +13,6 @@ from librosa import display
 import os
 import sklearn
 import random
-# import cupy, cupyx
-# from cupyx.scipy import signal
 
 from torchvision import transforms
 from tqdm import tqdm
@@ -43,23 +41,6 @@ tanh_params = [[], []]
 param_c = 0.0259
 param_k = 0.0207
 
-class NonlinearTanh(nn.Module):
-    def __init__(self):
-        super().__init__()
-        # self.c = nn.Parameter(torch.tensor(0.5))
-        # self.k = nn.Parameter(torch.tensor(0.25))
-
-    def forward(self, x): 
-        return 0.5 * F.tanh(((1/0.02)*(x-0.03))+1) 
-    
-    # def forward(self, x):
-    #     tanh_params[0].append(self.c)
-    #     tanh_params[1].append(self.k)
-    #     return 0.5*(torch.tanh((1/self.k)*(x-self.c))+1)
-    
-    # def _return_params(self):
-    #     return self.params
-
 def butter_lowpass(cutoff, order, fs):
     return scipy.signal.butter( N = order, 
                                 Wn = cutoff, 
@@ -87,144 +68,6 @@ def butter_lowpass_filter(data, cutoff, order, fs):
     #                         x = data
     # )
     # return y
-
-def make_harmonic_stack(f0=100, n_harm=40, dur=0.25001, sr=20000, low_lim=50, hi_lim=20000, n=None):
-  """Synthesize a tone created with a stack of harmonics.
-
-  Args:
-    f0 (int, optional): Fundamental frequency.
-    n_harm (int, optional): Number of harmonics to include.
-    dur (float, optional): Duration, in milliseconds. Note, the default value
-      was chosen to create a signal length that is compatible with the
-      predefined downsampling method.
-    sr (int, optional): Sampling rate.
-    low_lim (int, optional): Lower limit for filterbank.
-    hi_lim (int, optional): Upper limit for filerbank.
-    n (None, optional): Number of filters in filterbank.
-
-  Returns:
-    tuple:
-      **signal** (array): Synthesized tone.
-      **signal_params** (dict): A dictionary containing all of the parameters
-        used to synthesize the tone.
-  """
-  # i don't know where this came from, but choose a number of filters
-  if n is None:
-    n = int(np.floor(erb.freq2erb(hi_lim) - erb.freq2erb(low_lim)) - 1)
-
-  # synthesize tone from harmonic stack
-  t = np.arange(0, dur + 1 / sr, 1 / sr)
-  signal = np.zeros_like(t)
-  for i in range(1, n_harm + 1):
-    signal += np.sin(2 * np.pi * f0 * i * t)  # zero-phase
-
-  # store all the params in a dictionary
-  signal_params = {
-      'f0': f0,
-      'n_harm': n_harm,
-      'dur': dur,
-      'sr': sr,
-      'low_lim': low_lim,
-      'hi_lim': hi_lim,
-      'n': n
-  }
-
-  return signal, signal_params
-
-def demo_human_cochleagram_helper(signal, sr, n, sample_factor=2, downsample=None, nonlinearity=None):
-  """Demo the cochleagram generation.
-
-    signal (array): If a time-domain signal is provided, its
-      cochleagram will be generated with some sensible parameters. If this is
-      None, a synthesized tone (harmonic stack of the first 40 harmonics) will
-      be used.
-    sr: (int): If `signal` is not None, this is the sampling rate
-      associated with the signal.
-    n (int): number of filters to use.
-    sample_factor (int): Determines the density (or "overcompleteness") of the
-      filterbank. Original MATLAB code supported 1, 2, 4.
-    downsample({None, int, callable}, optional): Determines downsampling method to apply.
-      If None, no downsampling will be applied. If this is an int, it will be
-      interpreted as the upsampling factor in polyphase resampling
-      (with `sr` as the downsampling factor). A custom downsampling function can
-      be provided as a callable. The callable will be called on the subband
-      envelopes.
-    nonlinearity({None, 'db', 'power', callable}, optional): Determines
-      nonlinearity method to apply. None applies no nonlinearity. 'db' will
-      convert output to decibels (truncated at -60). 'power' will apply 3/10
-      power compression.
-
-    Returns:
-      array:
-        **cochleagram**: The cochleagram of the input signal, created with
-          largely default parameters.
-  """
-  human_coch = cgram.human_cochleagram(signal, sr, n=n, sample_factor=sample_factor,
-      downsample=downsample, nonlinearity=nonlinearity, strict=False)
-  img = np.flipud(human_coch)  # the cochleagram is upside down (i.e., in image coordinates)
-  return img
-
-
-### Waveform Generation from Cochleagram (Inversion) ###
-def demo_invert_cochleagram(signal=None, sr=None, n=None, playback=False):
-  """Demo that will generate a cochleagram from a signal, then invert this
-  cochleagram to produce a waveform signal.
-
-  Args:
-    signal (array, optional): Signal containing waveform data.
-    sr (int, optional): Sampling rate of the input signal.
-    n (int, optional): Number of filters to use in the filterbank.
-    playback (bool, optional): Determines if audio signals will be played
-      (using pyaudio). If False, only plots will be created. If True, the
-      original signal and inverted cochleagram signal will be played.
-
-  Returns:
-    None
-  """
-  # get a signal if one isn't provided
-  if signal is None:
-    signal, signal_params = make_harmonic_stack()
-    sr = signal_params['sr']
-    n = signal_params['n']
-    low_lim = signal_params['low_lim']
-    hi_lim = signal_params['hi_lim']
-  else:
-    assert sr is not None
-    assert n is not None
-    low_lim = 50  # this is the default for cochleagram.human_cochleagram
-    hi_lim = 20000  # this is the default for cochleagram.human_cochleagram
-
-  # generate a cochleagram from the signal
-  sample_factor = 2  # this is the default for cochleagram.human_cochleagram
-  coch = demo_human_cochleagram_helper(signal, sr, n, sample_factor=sample_factor)
-  print('Generated cochleagram with shape: ', coch.shape)
-
-  # invert the cochleagram to get a signal
-  coch = np.flipud(coch)  # the ouput of demo_human_cochleagram_helper is flipped
-  inv_coch_sig, inv_coch = cgram.invert_cochleagram(coch, sr, n, low_lim, hi_lim, sample_factor, n_iter=10, strict=False)
-
-  return inv_coch
-
-    
-#   print('Generated inverted cochleagram')
-#   print('Original signal shape: %s, Inverted cochleagram signal shape: %s' % (signal.shape, inv_coch_sig.shape))
-
-#   plt.subplot(211)
-#   plt.title('Cochleagram of original signal')
-#   utils.cochshow(coch, interact=False)  # this signal is already flipped
-#   plt.ylabel('filter #')
-#   plt.xlabel('time')
-#   plt.gca().invert_yaxis()
-
-#   plt.subplot(212)
-#   plt.title('Cochleagram of inverted signal')
-#   utils.cochshow(inv_coch, interact=False)  # this signal needs to be flipped
-#   plt.ylabel('filter #')
-#   plt.xlabel('time')
-#   plt.gca().invert_yaxis()
-#   plt.tight_layout()
-#   plt.show()
-
 
 def load_audio_dataset(
     data_dir            = None,
@@ -282,6 +125,7 @@ def load_audio_dataset(
 
         # calculate gammatone filterbanks
         freqs = np.linspace(10, 625, 64)
+        # Or choose frequencies to be non-linearly distributed
         # freqs = [ 20, 24.92, 29.93 ,35.05 ,40.26 ,45.58 ,51.00 ,56.53 ,62.17 ,67.93 ,73.79 ,79.77 ,85.87 ,92.09 ,98.43  
         #         , 104.90 ,111.50 ,118.22 ,125.08 ,132.08 ,139.21 ,146.48 ,153.90 ,161.46 ,169.18 ,177.04 ,185.07 ,193.25  
         #         , 201.59  ,210.09 ,218.77  ,227.61  ,236.64  ,245.83  ,255.22  ,264.78 ,274.54  ,284.49 ,294.63 ,304.98   
@@ -295,25 +139,8 @@ def load_audio_dataset(
                 )[::10]
 
                 # dataset_filtered[i, j] = scipy.signal.lfilter(b, a, dataset_numpy[i])[::10]
-                
-            
         
         return dataset_filtered, label_numpy
- 
-
-        # # calculate spectrogram with librosa
-        # for i in range(len(dataset_numpy)):
-        #     spectrogram = librosa.feature.melspectrogram(
-        #         y=dataset_numpy[i],
-        #         sr = 12500,
-        #     )
-        #     re_audio = librosa.feature.inverse.mel_to_audio(spectrogram, sr = 12500)
-        
-        #     print()
-
-        # for i in range(len(dataset_numpy)):
-        #     dataset_filtered[i] = demo_invert_cochleagram(dataset_numpy[i], sr=12500, n = 64)[:, ::10]
-
     
 class ToTensor(object):
     def __call__(self, data, label) -> object:
@@ -342,18 +169,6 @@ class AudioDataset(Dataset):
             return data, label
         else:
             return self.audios[index], self.labels[index]
-
-class OnlyLinearLayer(nn.Module):
-    def __init__(self) -> None:
-        super(OnlyLinearLayer, self).__init__()
-        # self.ln = nn.LayerNorm(971)  # 62144
-        self.ln = nn.LazyBatchNorm1d()
-        # self.linear_layer = nn.Linear(971, 10)
-        self.linear_layer = nn.LazyLinear(10)
-    def forward(self, x):
-        x = self.ln(x)
-        x = self.linear_layer(x)
-        return F.log_softmax(x, dim=1)
 
 class ConvNet(nn.Module):
     def __init__(self, n_input = 64, n_output=10, n_channel = 32):
@@ -458,7 +273,6 @@ if __name__ == "__main__":
         same_size_audios    = "MAX",
     )
 
-    # model = OnlyLinearLayer()
     model = ConvNet(n_input=64)
     print("Number of learnable params: ", sum(p.numel() for p in model.parameters() if p.requires_grad))
 
