@@ -153,7 +153,6 @@ class ConvNet(nn.Module):
         super().__init__()
         self.n_input = n_input
         self.bn0 = nn.BatchNorm1d(n_input)
-        # self.trainable_nonlinear = NonlinearTanh()
         self.conv1 = nn.Conv1d(in_channels= self.n_input, out_channels=n_channel, kernel_size=3)
         self.bn1 = nn.BatchNorm1d(n_channel)
         self.pool1 = nn.MaxPool1d(8)
@@ -164,7 +163,6 @@ class ConvNet(nn.Module):
 
     def forward(self, x):
         x = x.reshape(x.size(0), self.n_input, 971)
-        # x = self.trainable_nonlinear(x)
         x = self.bn0(x)
         x = self.conv1(x)
         x = F.tanh(self.bn1(x))
