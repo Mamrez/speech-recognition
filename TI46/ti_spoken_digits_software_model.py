@@ -1,4 +1,3 @@
-import scipy.signal
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -6,27 +5,24 @@ import numpy as np
 
 import tqdm
 import scipy
-from scipy.signal import gammatone, sosfilt
+import scipy.signal
+# from scipy.signal import gammatone, sosfilt
 import librosa
 import os
 import sklearn
-import random
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
 
 from torchvision import transforms
 from tqdm import tqdm
 from itertools import chain
 from torch.utils.data import Dataset, DataLoader
 
-from reservoirpy.nodes import Reservoir, Ridge
-from reservoirpy import set_seed
+# from gammatone.gtgram import gtgram
 
-import random
+import matplotlib
+matplotlib.use('TkAgg')
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def butter_lowpass(cutoff, order, fs):
     return scipy.signal.butter( N = order, 
@@ -55,7 +51,6 @@ def butter_lowpass_filter(data, cutoff, order, fs):
     #                         x = data
     # )
     # return y
-
 
 def load_audio_dataset(
     data_dir            = None,
@@ -107,19 +102,9 @@ def load_audio_dataset(
         for i in range(len(dataset)):
             dataset_numpy[i][0:len(dataset[i])] = dataset[i]
             label_numpy[i] = label[i]
-
         
-        # applying reservoir transformation
-        reservoir_states = np.zeros((len(dataset_numpy), 64, 971))
-        reservoir = [Reservoir(units=971, lr=random.uniform(0,1), sr=random.uniform(0,1), rc_connectivity=random.uniform(0,1), noise_rc=0.01, noise_fb=0.01) for i in range(0, 64)]
-        for i in range(len(dataset_numpy)):
-            for j in range(0, 64):
-                # set_seed(i)
-                reservoir_states[i, j, :] = reservoir[j].run(dataset_numpy[i])[0,:]
-
-        return reservoir_states, label_numpy
-
-
+        return dataset_numpy, label_numpy
+    
 class ToTensor(object):
     def __call__(self, data, label) -> object:
         return torch.tensor(data, dtype=torch.float), torch.tensor(np.asarray(label, dtype=np.float32), dtype=torch.float)
@@ -148,8 +133,62 @@ class AudioDataset(Dataset):
         else:
             return self.audios[index], self.labels[index]
 
+class M5(nn.Module):
+    def __init__(self, n_input=1, n_output=10, stride=25, n_channel=64):
+        super().__init__()
+        self.conv1 = nn.Conv1d(n_input, n_channel, kernel_size=125, stride=stride)
+        self.bn1 = nn.BatchNorm1d(n_channel)
+        self.pool1 = nn.MaxPool1d(4)
+        self.conv2 = nn.Conv1d(n_channel, n_channel, kernel_size=3)
+        self.bn2 = nn.BatchNorm1d(n_channel)
+        self.pool2 = nn.MaxPool1d(4)
+        self.conv3 = nn.Conv1d(n_channel, 2 * n_channel, kernel_size=3)
+        self.bn3 = nn.BatchNorm1d(2 * n_channel)
+        self.pool3 = nn.MaxPool1d(4)
+        self.conv4 = nn.Conv1d(2 * n_channel, 2 * n_channel, kernel_size=3)
+        self.bn4 = nn.BatchNorm1d(2 * n_channel)
+        self.pool4 = nn.MaxPool1d(4)
+        self.fc1 = nn.Linear(2 * n_channel, n_output)
+
+    def forward(self, x):
+        x = self.conv1(x.resize(x.size(0), 1, x.size(1)))
+        x = F.relu(self.bn1(x))
+        x = self.pool1(x)
+        x = self.conv2(x)
+        x = F.relu(self.bn2(x))
+        x = self.pool2(x)
+        x = self.conv3(x)
+        x = F.relu(self.bn3(x))
+        x = self.pool3(x)
+        x = self.conv4(x)
+        x = F.relu(self.bn4(x))
+        # x = self.pool4(x)
+        x = F.avg_pool1d(x, x.shape[-1])
+        x = x.permute(0, 2, 1)
+        x = self.fc1(x)
+        return F.log_softmax(x, dim=2)
+
+
+class M1(nn.Module):
+    def __init__(self, n_input=1, n_output=10, stride=1, n_channel=64):
+        super().__init__()
+        self.conv1 = nn.Conv1d(n_input, n_channel, kernel_size=3, stride=stride)
+        self.bn1 = nn.BatchNorm1d(n_channel)
+        self.pool1 = nn.MaxPool1d(4)
+        self.fc1 = nn.Linear(n_channel, n_output)
+
+    def forward(self, x):
+        x = self.conv1(x.resize(x.size(0), 1, x.size(1)))
+        x = F.relu(self.bn1(x))
+        x = self.pool1(x)
+        x = F.avg_pool1d(x, x.shape[-1])
+        x = x.permute(0, 2, 1)
+        x = self.fc1(x)
+        return F.log_softmax(x, dim=2)
+
+
 class ConvNet(nn.Module):
-    def __init__(self, n_input = 1, n_output=10, n_channel = 32):
+    def __init__(self, n_input = 1, n_output=10, n_channel = 64):
         super().__init__()
         self.n_input = n_input
         self.bn0 = nn.BatchNorm1d(n_input)
@@ -162,7 +201,7 @@ class ConvNet(nn.Module):
         self.fc1 = nn.Linear(n_channel, n_output)
 
     def forward(self, x):
-        x = x.reshape(x.size(0), self.n_input, 971)
+        x = x.reshape(x.size(0), self.n_input, x.size(1))
         x = self.bn0(x)
         x = self.conv1(x)
         x = F.tanh(self.bn1(x))
@@ -181,14 +220,14 @@ def train(
         train_loader,
         test_loader,
         save = True,
+        DNPU_train_enabled = True
 ):
     LOSS = []
     accuracies = [0]
     loss_fn = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(
         filter(lambda p: p.requires_grad, model.parameters()), 
-        # lr              = 0.0008, 
-        weight_decay    = 1e-3
+        weight_decay    = 1e-4
     )
     scheduler = torch.optim.lr_scheduler.OneCycleLR(
         optimizer, 
@@ -224,6 +263,8 @@ def train(
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                # clamping DNPU control voltages
+                # DNPUControlVoltageClamp(model, -0.30, 0.30)
                 current_loss += loss.item()
                 tepoch.set_postfix(
                     loss = current_loss / (i + 1),
@@ -234,41 +275,15 @@ def train(
 
     return model.state_dict()
 
-def reservoir_ridge(audios, labels):
-    encoder = OneHotEncoder(sparse=False)
-    y_onehot = encoder.fit_transform(labels.reshape(-1, 1))
-    
-    X_train, X_test, y_train, y_test = train_test_split(audios, y_onehot, test_size=0.1, random_state=42)
-
-
-    reservoir = Reservoir(units = 10000, lr=1e-3)
-    readout = Ridge(ridge=1e-6)
-
-    # Pass the training data through the reservoir
-    reservoir_states = reservoir.run(X_train)
-
-    # Train the readout layer on the reservoir states
-    readout.fit(reservoir_states, y_train)
-
-    # Pass the test data through the reservoir
-    test_states = reservoir.run(X_test)
-
-    # Predict using the trained readout
-    y_pred = readout.run(test_states)
-
-    # Convert predictions from one-hot to class labels
-    y_pred_labels = np.argmax(y_pred, axis=1)
-    y_test_labels = np.argmax(y_test, axis=1)
-
-    # Calculate accuracy
-    accuracy = accuracy_score(y_test_labels, y_pred_labels)
-    print(f'Accuracy: {accuracy * 100:.2f}%')
 
 if __name__ == "__main__":
-    EMPTY = "C:/Users/Mohamadreza/Documents/github/brainspy-tasks/tmp/projected_in_house_arsenic/empty/"
+
+    from torchlop import profile
+
+    EMPTY = "C:/Users/Mohamadreza/OneDrive - University of Twente/Documenten/github/brainspy-tasks/bspytasks/temporal_kernels/empty"
     batch_size = 16
-    audios, labels = load_audio_dataset(
-        data_dir        = (EMPTY, "C:/Users/Mohamadreza/Documents/ti_spoken_digits/female_speaker"),
+    audios, labels = load_audio_dataset( 
+        data_dir        = (EMPTY, "C:/Users/Mohamadreza/OneDrive - University of Twente/Documenten/github/toGitHub/speech-recognition/data/female_speaker"),
         min_max_scale   = True,
         low_pass_filter = True,
         # same_size_audios: can be "NONE" or an "MAX"
@@ -278,7 +293,9 @@ if __name__ == "__main__":
         same_size_audios    = "MAX",
     )
 
-    model = ConvNet(n_input=64)
+    # model = ConvNet(n_input=1)
+    model = M1()
+    macs, params, layer_infos = profile(model, inputs=(torch.empty(1, 9710),)) 
     print("Number of learnable params: ", sum(p.numel() for p in model.parameters() if p.requires_grad))
 
     dataset = AudioDataset(
@@ -317,5 +334,7 @@ if __name__ == "__main__":
         model.to(device),
         num_epochs      = 500,
         train_loader    = train_loader,
-        test_loader     = test_loader
+        test_loader     = test_loader,
+        save            = False,
+        DNPU_train_enabled = False
     )

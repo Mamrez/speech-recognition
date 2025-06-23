@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import tqdm
+from torchlop import profile
 
 from torch.utils.data import DataLoader
 
@@ -80,11 +81,39 @@ class M1Compact(nn.Module):
     
     def forward(self, x):
         # the data length is 1250 while the x[971:1250] are zeros. We remove to speed up the process time. This step has no effect on the accuracy.
-        x = self.bn1(x[:, :, 0:971])
+        x = self.bn1(x[:, 0:16, 0:972])
         x = self.conv1(x)
         x = self.bn2(x)
         x = F.relu(x)
         x = self.pool1(x)
+        x = F.avg_pool1d(x, x.shape[-1])
+        x = x.permute(0, 2, 1)
+        x = self.fc1(x)
+        return F.log_softmax(x, dim=2)
+
+class M2Compact(nn.Module):
+    def __init__(self, input_ch = 64, n_channels=32) -> None:
+        super().__init__()
+        self.bn1 = nn.BatchNorm1d(input_ch)
+        self.conv1 = nn.Conv1d(input_ch, out_channels = n_channels, kernel_size = 3)
+        self.bn2 = nn.BatchNorm1d(n_channels)
+        self.pool1 = nn.MaxPool1d(8)
+        self.conv2 = nn.Conv1d(in_channels = n_channels, out_channels = n_channels, kernel_size = 3)
+        self.bn3 = nn.BatchNorm1d(n_channels)
+        self.pool2 = nn.MaxPool1d(8)
+        self.fc1   = nn.Linear(32, 10)
+    
+    def forward(self, x):
+        # the data length is 1250 while the x[971:1250] are zeros. We remove to speed up the process time. This step has no effect on the accuracy.
+        x = self.bn1(x[:, :, 0:972:2])
+        x = self.conv1(x)
+        x = self.bn2(x)
+        x = F.tanh(x)
+        x = self.pool1(x)
+        x = self.conv2(x)
+        x = self.bn3(x)
+        x = F.tanh(x)
+        x = self.pool2(x)
         x = F.avg_pool1d(x, x.shape[-1])
         x = x.permute(0, 2, 1)
         x = self.fc1(x)
@@ -176,8 +205,8 @@ if __name__ == '__main__':
     sample_shape = (64, 1250)
     
     # - Create dataset
-    np_data_test = np.load("data/testset_numpy.npy", allow_pickle = True)
-    np_data_train = np.load("data/trainset_numpy.npy", allow_pickle = True)
+    np_data_test = np.load("speech-recognition/data/testset_numpy.npy", allow_pickle = True)
+    np_data_train = np.load("speech-recognition/data/trainset_numpy.npy", allow_pickle = True)
 
     # test set
     torch_data_test = torch.empty(size=(len(np_data_test),sample_shape[0], sample_shape[1]))
@@ -209,9 +238,11 @@ if __name__ == '__main__':
         drop_last   = False
     )
 
-    model = M1Compact(
+    model = M2Compact(
         input_ch = 64,
     )
+    macs, params, layer_infos = profile(model, inputs=(torch.empty(1, 64, 972),)) 
+
     # model = LinearLayer()
 
     # model = M3Compact(input_ch=64, n_channels=64)
