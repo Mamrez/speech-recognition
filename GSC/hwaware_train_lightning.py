@@ -18,7 +18,6 @@ class M4(nn.Module):
     def __init__(self, n_output = 12, n_channel = 64):
         super().__init__()
         self.layer_norm = nn.BatchNorm1d(n_channel)
-        # self.layer_norm = nn.LayerNorm((64, 496*4))
         self.conv2 = nn.Conv1d(n_channel, n_channel, kernel_size=8)
         self.bn2 = nn.BatchNorm1d(n_channel)
         self.pool2 = nn.MaxPool1d(4)
@@ -118,9 +117,8 @@ class LitDataModule(L.LightningDataModule):
         self.num_workers = num_workers
 
     def prepare_data(self):
-        self.trainset = torch.load("/mnt/c/Users/moham/OneDrive - University of Twente/Documenten/github/brainspy-tasks/bspytasks/temporal_kernels/GoogleSpeechCommands/dataset/dnpu_measurements/trainset_kernel=8_12classes.pt", weights_only=False)
-        self.testset = torch.load("/mnt/c/Users/moham/OneDrive - University of Twente/Documenten/github/brainspy-tasks/bspytasks/temporal_kernels/GoogleSpeechCommands/dataset/dnpu_measurements/testset_kernel=8_12classes.pt", weights_only=False)
-        print()
+        self.trainset = torch.load("GSC/datasets/dnpu_measurements/trainset_kernel=8_12classes.pt", weights_only=False)
+        self.testset = torch.load("GSC/datasets/dnpu_measurements/testset_kernel=8_12classes.pt", weights_only=False)
         
     def setup(self, stage = None):
         pass
@@ -145,8 +143,6 @@ class LitDataModule(L.LightningDataModule):
             persistent_workers=True
         )
 
-
-
 if __name__ == '__main__':
 
     from pytorch_lightning.callbacks import ModelCheckpoint
@@ -157,10 +153,13 @@ if __name__ == '__main__':
     from aihwkit_lightning.simulator.configs import (
         TorchInferenceRPUConfig,
         WeightClipType,
-        WeightNoiseInjectionType,
+        WeightModifierType,
     )
 
     from aihwkit_lightning.optim import AnalogOptimizer
+
+    # Boolean flag to enable/disable model checkpointing 
+    MODEL_CHECKPOINTING = False
 
     rpu_config = TorchInferenceRPUConfig()
     rpu_config.forward.inp_res = 2**8 - 2
@@ -172,7 +171,7 @@ if __name__ == '__main__':
     rpu_config.clip.type = WeightClipType.LAYER_GAUSSIAN_PER_CHANNEL
     rpu_config.clip.sigma = 1.5
 
-    rpu_config.modifier.noise_type = WeightNoiseInjectionType.ADD_NORMAL_PER_CHANNEL
+    rpu_config.modifier.type = WeightModifierType.ADD_NORMAL_PER_CHANNEL
 
     rpu_config.modifier.std_dev = 0.1
 
@@ -198,22 +197,22 @@ if __name__ == '__main__':
                 analog_train    = analog_train
     )
 
-    # callbacks = [
-    #     ModelCheckpoint(
-    #                     save_top_k=1, 
-    #                     mode='max', 
-    #                     monitor="valid_acc"
-    #                 )
-    # ]  # save top 1 model 
-    # logger = CSVLogger(save_dir="logs/dnpu_logs/", name="analog_trained" if analog_train else "full_precision")
-    # logger_tb = TensorBoardLogger("logs/dnpu_logs/tb_logs", name="analog_trained" if analog_train else "full_precision")
+    callbacks = [
+        ModelCheckpoint(
+                        save_top_k=1, 
+                        mode='max', 
+                        monitor="valid_acc"
+                    )
+    ]  # save top 1 model 
+    logger = CSVLogger(save_dir="logs/dnpu_logs/", name="analog_trained" if analog_train else "full_precision")
+    logger_tb = TensorBoardLogger("logs/dnpu_logs/tb_logs", name="analog_trained" if analog_train else "full_precision")
 
     trainer = L.Trainer(
         max_epochs  = 500,
-        # callbacks   = callbacks,
+        callbacks   = callbacks if MODEL_CHECKPOINTING else None,
         accelerator ='gpu',
-        devices     = [1],
-        # logger      = [logger, logger_tb],
+        devices     = [0],
+        logger      = [logger, logger_tb] if MODEL_CHECKPOINTING else None,
         log_every_n_steps   = 20,
         precision = '16-mixed'
     )

@@ -1,13 +1,15 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# import matplotlib
-# import matplotlib.pyplot as plt
+import matplotlib
+import matplotlib.pyplot as plt
 import numpy as np
 import torchmetrics
-# import os
-# matplotlib.use("TkAgg")
-# os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
+# Set matplotlib backend and environment variable to avoid duplicate library errors
+import os
+matplotlib.use("TkAgg")
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -63,17 +65,17 @@ if __name__ == '__main__':
     from aihwkit_lightning.simulator.configs import (
         TorchInferenceRPUConfig,
         WeightClipType,
-        WeightNoiseInjectionType,
+        WeightModifierType,
     )
 
     from aihwkit_lightning.optim import AnalogOptimizer
 
-    # from sklearn.metrics import confusion_matrix
-    # import seaborn as sn
-    # import pandas as pd
-    # import matplotlib.pyplot as plt
-    # import matplotlib.colors as mcolors
-    # from torchlop import profile
+    # Aux libraries for plotting confusion matrix and profiling the model if desired
+    from sklearn.metrics import confusion_matrix
+    import seaborn as sn
+    import pandas as pd
+    import matplotlib.colors as mcolors
+    from torchlop import profile
 
     rpu_config = TorchInferenceRPUConfig()
     rpu_config.forward.inp_res = 2**8 - 2
@@ -85,7 +87,7 @@ if __name__ == '__main__':
     rpu_config.clip.type = WeightClipType.LAYER_GAUSSIAN_PER_CHANNEL
     rpu_config.clip.sigma = 1.5
 
-    rpu_config.modifier.noise_type = WeightNoiseInjectionType.ADD_NORMAL_PER_CHANNEL
+    rpu_config.modifier.type = WeightModifierType.ADD_NORMAL_PER_CHANNEL
     rpu_config.modifier.std_dev = 0.05
 
     rpu_config.mapping.max_input_size = -1
@@ -98,14 +100,7 @@ if __name__ == '__main__':
     batch_size = 10
     analog_train = True
 
-    testset = torch.load("/mnt/c/Users/moham/OneDrive - University of Twente/Documenten/github/brainspy-tasks/bspytasks/temporal_kernels/GoogleSpeechCommands/dataset/dnpu_measurements/testset_kernel=8_12classes.pt", weights_only=False)
-
-    # train_dataloader = torch.utils.data.DataLoader(
-    #     dataset=trainset,
-    #     batch_size = batch_size,
-    #     shuffle= True,
-    #     drop_last=False,
-    # )
+    testset = torch.load("/GSC/datasets/dnpu_measurements/testset_kernel=8_12classes.pt", weights_only=False)
 
     val_dataloader = torch.utils.data.DataLoader(
         dataset=testset,
@@ -160,29 +155,28 @@ if __name__ == '__main__':
     accuracy = accuracy_metric(all_preds.to('cpu'), all_labels.to('cpu'))
     print(f'Validation Accuracy: {accuracy.item()}')
 
-    # print("plotting confusion matrix")
+    print("plotting confusion matrix")
 
 
-    # # plot confusion matrix
-    # classes = ['Unknown', 'Down', 'Go', 'Left', 'No', 'Off', 'On', 'Right',
-    #     'Stop', 'Up', 'Yes', 'House']
-    # cf_matrix = confusion_matrix(all_labels.detach().cpu(), all_preds.detach().cpu())
+    # plot confusion matrix
+    classes = ['Unknown', 'Down', 'Go', 'Left', 'No', 'Off', 'On', 'Right',
+        'Stop', 'Up', 'Yes', 'House']
+    cf_matrix = confusion_matrix(all_labels.detach().cpu(), all_preds.detach().cpu())
 
-    # # normalizing confusion matrix
-    # cf_matrix = cf_matrix.astype('float') / cf_matrix.sum(axis=1)[:, np.newaxis]
+    # normalizing confusion matrix
+    cf_matrix = cf_matrix.astype('float') / cf_matrix.sum(axis=1)[:, np.newaxis]
 
-    # df_cm = pd.DataFrame(cf_matrix / np.sum(cf_matrix, axis=1)[:, None],
-    #                     index = [i for i in classes],
-    #                     columns = [i for i in classes])
-    # plt.figure();sn.heatmap(df_cm, annot=False, fmt = '.2f', cmap='Blues', norm = mcolors.LogNorm())
-    # accuracy_values = np.diag(df_cm)
-    # for i in range(len(classes)):
-    #     plt.text(i + 0.5, i + 0.5, f'{accuracy_values[i]:.2f}', 
-    #             ha="center", va="center", color="black")
+    df_cm = pd.DataFrame(cf_matrix / np.sum(cf_matrix, axis=1)[:, None],
+                        index = [i for i in classes],
+                        columns = [i for i in classes])
+    plt.figure();sn.heatmap(df_cm, annot=False, fmt = '.2f', cmap='Blues', norm = mcolors.LogNorm())
+    accuracy_values = np.diag(df_cm)
+    for i in range(len(classes)):
+        plt.text(i + 0.5, i + 0.5, f'{accuracy_values[i]:.2f}', 
+                ha="center", va="center", color="black")
 
-    # plt.ylabel('True label')
-    # plt.xlabel('Predicted label')
-    # plt.title('Confusion Matrix with Accuracy')
-    # plt.show(block=True)
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+    plt.title('Confusion Matrix with Accuracy')
+    plt.show(block=True)
 
-    # print("")
