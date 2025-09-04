@@ -1,4 +1,8 @@
-# In-materia speech recognition
+<div style="text-align: center;">
+<img src="docs/cover.png" alt="cover" height="500"/>
+</div>
+
+# Analogue speech recognition based on physical computing
 
 <!-- Simple overview of use/purpose. -->
 
