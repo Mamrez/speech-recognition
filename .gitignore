@@ -1,10 +1,9 @@
-TI46/data
 /empty
+/empty/*
 
-TI46/data/*
+TI46/datasets/*
 TI46/lightning_logs
 TI46/lightning_logs/*
-/empty/*
 
 GSC/datasets
 GSC/datasets/*
