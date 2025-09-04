@@ -40,4 +40,4 @@ Mohamadreza Zolfagharinejad -- University of Twente
 ## Version History
 
 * 0.1
-    * Initial Release
+    * Initial release; compatible with aihwkit_lightning==0.0.1
