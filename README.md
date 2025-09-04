@@ -1,5 +1,5 @@
 <div style="text-align: center;">
-<img src="docs/cover.png" alt="cover" height="500"/>
+<img src="docs/cover.jpg" alt="cover" height="500"/>
 </div>
 
 # Analogue speech recognition based on physical computing
