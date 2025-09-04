@@ -1,6 +1,7 @@
-<div style="text-align: center;">
-<img src="docs/cover.jpg" alt="cover" height="500"/>
-</div>
+<figure style="text-align: center;">
+  <img src="docs/cover.jpg" alt="cover" height="500"/>
+  <figcaption>Figure 1: Overview of the mainstream speech recognition systems.</figcaption>
+</figure>
 
 # Analogue speech recognition based on physical computing
 
