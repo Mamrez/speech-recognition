@@ -13,6 +13,7 @@ import time
 
 from pytorch_lightning.loggers import TensorBoardLogger
 
+from aihwkit_lightning.optim import AnalogOptimizer
 
 class M4(nn.Module):
     def __init__(self, n_output = 12, n_channel = 64):
@@ -88,7 +89,7 @@ class LitClassifier(L.LightningModule):
         self.model.eval()
         with torch.no_grad():
             _, true_labels, predicted_labels = self._shared_forward_step(batch)
-        self.train_acc.update(predicted_labels, true_labels)
+        self.train_acc(predicted_labels, true_labels)
         self.log("train_acc", self.train_acc, on_epoch=True, on_step=False)
         self.model.train()
 
@@ -103,7 +104,10 @@ class LitClassifier(L.LightningModule):
     def configure_optimizers(self):
         if self.analog_train:
             optimizer = AnalogOptimizer(
-                torch.optim.AdamW, self.model.analog_layers(), self.parameters())
+                torch.optim.AdamW,
+                lambda: list(self.model.analog_layers()),
+                self.parameters()
+            )
         else:
             optimizer = torch.optim.AdamW(self.parameters())
 
@@ -115,32 +119,33 @@ class LitDataModule(L.LightningDataModule):
         self.num_classes = num_classes
         self.batch_size = batch_size
         self.num_workers = num_workers
+        
 
     def prepare_data(self):
-        self.trainset = torch.load("GSC/datasets/dnpu_measurements/trainset_kernel=8_12classes.pt", weights_only=False)
-        self.testset = torch.load("GSC/datasets/dnpu_measurements/testset_kernel=8_12classes.pt", weights_only=False)
+        pass
         
     def setup(self, stage = None):
-        pass
+        self.trainset = torch.load("GSC/datasets/dnpu_measurements/trainset_kernel=8_12classes.pt", weights_only=False)
+        self.testset = torch.load("GSC/datasets/dnpu_measurements/testset_kernel=8_12classes.pt", weights_only=False)
     
     def train_dataloader(self):
         return DataLoader(
-            dataset=self.trainset,
-            batch_size = self.batch_size,
-            shuffle= True,
-            drop_last=False,
-            num_workers=self.num_workers,
-            persistent_workers=True
+            dataset         = self.trainset,
+            batch_size      = self.batch_size,
+            shuffle         = True,
+            drop_last       = False,
+            num_workers     = self.num_workers,
+            persistent_workers  = True
         )
     
     def val_dataloader(self):
         return DataLoader(
-            dataset=self.testset,
-            batch_size = self.batch_size,
-            shuffle= False,
-            drop_last=False,
-            num_workers=self.num_workers,
-            persistent_workers=True
+            dataset         = self.testset,
+            batch_size      = self.batch_size,
+            shuffle         = False,
+            drop_last       = False,
+            num_workers     = self.num_workers,
+            persistent_workers = True
         )
 
 if __name__ == '__main__':
@@ -153,10 +158,8 @@ if __name__ == '__main__':
     from aihwkit_lightning.simulator.configs import (
         TorchInferenceRPUConfig,
         WeightClipType,
-        WeightModifierType,
+        WeightNoiseInjectionType,
     )
-
-    from aihwkit_lightning.optim import AnalogOptimizer
 
     # Boolean flag to enable/disable model checkpointing 
     MODEL_CHECKPOINTING = False
@@ -171,7 +174,7 @@ if __name__ == '__main__':
     rpu_config.clip.type = WeightClipType.LAYER_GAUSSIAN_PER_CHANNEL
     rpu_config.clip.sigma = 1.5
 
-    rpu_config.modifier.type = WeightModifierType.ADD_NORMAL_PER_CHANNEL
+    rpu_config.modifier.noise_type = WeightNoiseInjectionType.ADD_NORMAL_PER_CHANNEL
 
     rpu_config.modifier.std_dev = 0.1
 
@@ -217,8 +220,9 @@ if __name__ == '__main__':
         precision = '16-mixed'
     )
 
+    dm = LitDataModule(num_classes=num_classes, batch_size=batch_size)
     start_time = time.time()
-    trainer.fit(model=LitModel, datamodule=LitDataModule(num_classes=num_classes, batch_size=batch_size))
+    trainer.fit(model=LitModel, datamodule=dm)
 
     runtime = (time.time() - start_time)/60
     print(f"Training took {runtime:.2f} min in total.")
