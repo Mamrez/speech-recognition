@@ -2,7 +2,14 @@ TI46/data
 /empty
 
 TI46/data/*
+TI46/lightning_logs
+TI46/lightning_logs/*
 /empty/*
 
 GSC/datasets
 GSC/datasets/*
+GSC/lightning_logs
+GSC/lightning_logs/*
+
+GSC/logs
+GSC/logs/*

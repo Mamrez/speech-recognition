@@ -1,26 +1,10 @@
-# from lightning.pytorch.utilities.types import TRAIN_DATALOADERS
-import sklearn.preprocessing
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
-import os
-import sklearn
-import scipy
-from sklearn import model_selection
 
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader
 
-# import librosa
-# import matplotlib.pyplot as plt
-
-# import matplotlib.pyplot as plt
-# import IPython.display as ipd
-import numpy as np
-
-from tqdm import tqdm
-from itertools import chain
-from torchvision import transforms
+torch.set_float32_matmul_precision('medium')
 
 import pytorch_lightning as L
 import torchmetrics
@@ -29,21 +13,6 @@ import time
 
 from pytorch_lightning.loggers import TensorBoardLogger
 
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-def butter_lowpass(cutoff, order, fs):
-    return scipy.signal.butter( N = order, 
-                                Wn = cutoff, 
-                                btype = 'low', 
-                                analog = False,
-                                fs= fs,
-                                output = 'sos'
-    )
-
-def butter_lowpass_filter(data, cutoff, order, fs):
-    sos = butter_lowpass(cutoff, order = order, fs=fs)
-    return scipy.signal.sosfilt(sos, data)
 
 class M4(nn.Module):
     def __init__(self, n_output = 12, n_channel = 64):
@@ -91,12 +60,11 @@ class M4(nn.Module):
         return F.log_softmax(x, dim=2)
 
 class LitClassifier(L.LightningModule):
-    def __init__(self, *args: torch.Any, **kwargs: torch.Any) -> None:
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__()
 
         self.model = kwargs.get('model')
         self.num_classes = kwargs.get('num_classes')
-        self.max_lr = kwargs.get('max_lr')
         self.analog_train = kwargs.get('analog_train')
 
         self.train_acc = torchmetrics.Accuracy(task='multiclass', num_classes=self.num_classes)
@@ -136,35 +104,9 @@ class LitClassifier(L.LightningModule):
     def configure_optimizers(self):
         if self.analog_train:
             optimizer = AnalogOptimizer(
-                torch.optim.AdamW, self.model.analog_layers(), self.parameters(), lr = 1e-4, weight_decay = 1e-4
-            )
+                torch.optim.AdamW, self.model.analog_layers(), self.parameters())
         else:
-            optimizer = torch.optim.AdamW(self.parameters(), weight_decay=1e-4)
-
-        lr_scheduler_config = {
-            # REQUIRED: The scheduler instance
-            "scheduler": torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.max_lr, total_steps=self.trainer.estimated_stepping_batches),
-            # The unit of the scheduler's step size, could also be 'step'.
-            # 'epoch' updates the scheduler on epoch end whereas 'step'
-            # updates it after a optimizer update.
-            "interval": "epoch",
-            # How many epochs/steps should pass between calls to
-            # `scheduler.step()`. 1 corresponds to updating the learning
-            # rate after every epoch/step.
-            "frequency": 1,
-            # Metric to to monitor for schedulers like `ReduceLROnPlateau`
-            "monitor": "val_loss",
-            # If set to `True`, will enforce that the value specified 'monitor'
-            # is available when the scheduler is updated, thus stopping
-            # training if not found. If set to `False`, it will only produce a warning
-            "strict": True,
-            # If using the `LearningRateMonitor` callback to monitor the
-            # learning rate progress, this keyword can be used to specify
-            # a custom logged name
-            "name": None,
-        }
-
-        # return [optimizer], [lr_scheduler_config]
+            optimizer = torch.optim.AdamW(self.parameters())
 
         return optimizer
     
@@ -176,55 +118,14 @@ class LitDataModule(L.LightningDataModule):
         self.num_workers = num_workers
 
     def prepare_data(self):
-        # self.labels_np = np.load("dataset/SUBSET/numpy_audios/labels_np.npy", 
-        #                 allow_pickle=True)[0 * 200 : self.num_classes * 200]
-        # folder_path = "dataset/dnpu_measurements"
-        # self.dataset = np.zeros(((self.num_classes * 200, 64, 4*496)))
-        # i = 0
-        # for filename in sorted(os.listdir(folder_path)):
-        #     if filename.endswith("6.npy") or filename.endswith("13.npy") or filename.endswith("20.npy"):
-        #         if not filename.endswith("29.npy"):
-        #             file_path = os.path.join(folder_path, filename)
-        #             file = np.load(file_path, allow_pickle=True)
-        #             self.dataset[i * 200 : (i + 7) * 200][:][:] = file[:,:,0:7936:4]
-        #             i += 7
-        # for filename in sorted(os.listdir(folder_path)):
-        #     if  filename.endswith("29.npy"):
-        #         file_path = os.path.join(folder_path, filename)
-        #         file = np.load(file_path, allow_pickle=True)
-        #         self.dataset[i * 200 : (i + 9) * 200 - 1][:][:] = file[:,:,0:7936:4]
-        self.trainset = torch.load("dataset/dnpu_measurements/trainset_kernel=8_12classes.pt")
-        self.testset = torch.load("dataset/dnpu_measurements/testset_kernel=8_12classes.pt")
+        self.trainset = torch.load("/mnt/c/Users/moham/OneDrive - University of Twente/Documenten/github/brainspy-tasks/bspytasks/temporal_kernels/GoogleSpeechCommands/dataset/dnpu_measurements/trainset_kernel=8_12classes.pt", weights_only=False)
+        self.testset = torch.load("/mnt/c/Users/moham/OneDrive - University of Twente/Documenten/github/brainspy-tasks/bspytasks/temporal_kernels/GoogleSpeechCommands/dataset/dnpu_measurements/testset_kernel=8_12classes.pt", weights_only=False)
         print()
         
     def setup(self, stage = None):
-        # train_data, test_data, train_label, test_label = sklearn.model_selection.train_test_split(
-        #     self.dataset,
-        #     self.labels_np, 
-        #     test_size = 0.1, 
-        #     train_size = 0.9,
-        #     stratify=self.labels_np,
-        #     random_state = 0
-        # )
-
-        # torch_data_test = torch.empty(size=(len(test_data), 64, 4*496))
-        # torch_targets_test = torch.empty(size=(len(test_data),))
-        # for i in range(0, len(test_data)):
-        #     torch_data_test[i] = torch.Tensor(test_data[i])
-        #     torch_targets_test[i] = test_label[i]
-        # self.testset = torch.utils.data.TensorDataset(torch_data_test, torch_targets_test)
-        
-        # # train set
-        # torch_data_train = torch.empty(size=(len(train_data), 64, 4*496))
-        # torch_targets_train = torch.empty(size=(len(train_data),))
-        # for i in range(0, len(train_data)):
-        #     torch_data_train[i] = torch.Tensor(train_data[i])
-        #     torch_targets_train[i] = train_label[i]
-        # self.trainset = torch.utils.data.TensorDataset(torch_data_train, torch_targets_train)
-
         pass
     
-    def train_dataloader(self) -> torch.Any:
+    def train_dataloader(self):
         return DataLoader(
             dataset=self.trainset,
             batch_size = self.batch_size,
@@ -234,7 +135,7 @@ class LitDataModule(L.LightningDataModule):
             persistent_workers=True
         )
     
-    def val_dataloader(self) -> torch.Any:
+    def val_dataloader(self):
         return DataLoader(
             dataset=self.testset,
             batch_size = self.batch_size,
@@ -252,11 +153,12 @@ if __name__ == '__main__':
     from pytorch_lightning.loggers import CSVLogger
 
     from aihwkit_lightning.nn.conversion import convert_to_analog
-    from aihwkit_lightning.simulator.configs import TorchInferenceRPUConfig
 
-    from aihwkit_lightning.simulator.configs import WeightClipType
-
-    from aihwkit_lightning.simulator.configs import WeightModifierType
+    from aihwkit_lightning.simulator.configs import (
+        TorchInferenceRPUConfig,
+        WeightClipType,
+        WeightNoiseInjectionType,
+    )
 
     from aihwkit_lightning.optim import AnalogOptimizer
 
@@ -270,8 +172,9 @@ if __name__ == '__main__':
     rpu_config.clip.type = WeightClipType.LAYER_GAUSSIAN_PER_CHANNEL
     rpu_config.clip.sigma = 1.5
 
-    rpu_config.modifier.type = WeightModifierType.ADD_NORMAL_PER_CHANNEL
-    rpu_config.modifier.std_dev = 1.0
+    rpu_config.modifier.noise_type = WeightNoiseInjectionType.ADD_NORMAL_PER_CHANNEL
+
+    rpu_config.modifier.std_dev = 0.1
 
     rpu_config.mapping.max_input_size = -1
 
@@ -281,59 +184,38 @@ if __name__ == '__main__':
     rpu_config.pre_post.input_range.decay = 0.15
 
     num_classes = 12
-    batch_size = 32
+    batch_size = 256
     analog_train = True
-    load_pre_trained_model = False
 
-    # load pre-trained model
-    if load_pre_trained_model:
-        if analog_train:
-            checkpoint = torch.load("logs/dnpu_logs/full_precision/version_0/checkpoints/epoch=353-step=59826.ckpt")
-            new_state_dict = {}
-            for key, value in checkpoint['state_dict'].items():
-                new_key = key.replace('model.', '')
-                new_state_dict[new_key] = value
-            pytorch_model = M4(
-                n_output=num_classes,
-                n_channel=64
-            )
-            pytorch_model.load_state_dict(new_state_dict)
-        else:
-            pytorch_model = M4(
-                n_output=num_classes,
-                n_channel=64
-            )
-    else:
-        pytorch_model = M4(
-            n_output=num_classes,
-            n_channel=64
-        )
+    pytorch_model = M4(
+        n_output=num_classes,
+        n_channel=64
+    )
         
     LitModel = LitClassifier(
                 model           = convert_to_analog(pytorch_model, rpu_config, verbose=True) if analog_train else pytorch_model,
                 num_classes     = num_classes,
-                max_lr          = 1e-2,
                 analog_train    = analog_train
     )
 
-    callbacks = [
-        ModelCheckpoint(
-                        save_top_k=1, 
-                        mode='max', 
-                        monitor="valid_acc"
-                    )
-    ]  # save top 1 model 
-    logger = CSVLogger(save_dir="logs/dnpu_logs/", name="analog_trained" if analog_train else "full_precision")
-    logger_tb = TensorBoardLogger("logs/dnpu_logs/tb_logs", name="analog_trained" if analog_train else "full_precision")
+    # callbacks = [
+    #     ModelCheckpoint(
+    #                     save_top_k=1, 
+    #                     mode='max', 
+    #                     monitor="valid_acc"
+    #                 )
+    # ]  # save top 1 model 
+    # logger = CSVLogger(save_dir="logs/dnpu_logs/", name="analog_trained" if analog_train else "full_precision")
+    # logger_tb = TensorBoardLogger("logs/dnpu_logs/tb_logs", name="analog_trained" if analog_train else "full_precision")
 
     trainer = L.Trainer(
         max_epochs  = 500,
-        callbacks   = callbacks,
-        accelerator ='auto',
-        devices     = 'auto',
-        logger      = [logger, logger_tb],
+        # callbacks   = callbacks,
+        accelerator ='gpu',
+        devices     = [1],
+        # logger      = [logger, logger_tb],
         log_every_n_steps   = 20,
-        # precision = 16
+        precision = '16-mixed'
     )
 
     start_time = time.time()
@@ -341,32 +223,4 @@ if __name__ == '__main__':
 
     runtime = (time.time() - start_time)/60
     print(f"Training took {runtime:.2f} min in total.")
-
-    print("Checking best model accuracy...")
-    best_model_path = callbacks[0].best_model_path
-    model = LitClassifier.load_from_checkpoint(best_model_path, model = convert_to_analog(pytorch_model, rpu_config, verbose=True) if analog_train else pytorch_model,
-                                        num_classes     = num_classes,
-                                        max_lr          = 1e-2,
-                                        analog_train    = analog_train
-    )
-    model.eval()
-    validation_dataloader = trainer.val_dataloaders
-    accuracy_metric = torchmetrics.Accuracy(task='multiclass', num_classes=num_classes)
-    all_preds = []
-    all_labels = []
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    with torch.no_grad():
-        for batch in validation_dataloader:
-            features, true_labels = batch
-            logits = (model(features.to(device)).squeeze()).to(device)
-            preds = torch.argmax(logits, dim=1)
-            all_preds.append(preds)
-            all_labels.append(true_labels)
-
-    all_preds = torch.cat(all_preds)
-    all_labels = torch.cat(all_labels)
-    accuracy = accuracy_metric(all_preds.to('cpu'), all_labels.to('cpu'))
-    print(f'Best Validation Accuracy: {accuracy.item()}')
 

@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import matplotlib
-import matplotlib.pyplot as plt
+# import matplotlib
+# import matplotlib.pyplot as plt
 import numpy as np
 import torchmetrics
-import os
-matplotlib.use("TkAgg")
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+# import os
+# matplotlib.use("TkAgg")
+# os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -57,43 +57,23 @@ class M4(nn.Module):
         x = self.fc2(x)
         return F.log_softmax(x, dim=2)
 
-from ptflops import get_model_complexity_info
-class AmbrogioLinear(nn.Module):
-    def __init__(self, n_output=12):
-        super().__init__()
-        self.fc1 = nn.Linear(1024, 512)
-        self.fc2 = nn.Linear(512, 512)
-        self.fc3 = nn.Linear(512, 12)
-
-    def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
-        return F.log_softmax(x, dim=1)
-
-def testForAmbrogio():
-    vv, zz = get_model_complexity_info(AmbrogioLinear(), (1, 1024), as_strings=True, print_per_layer_stat=True)
-    macs, params, layer_infos = profile(AmbrogioLinear(), inputs=(torch.empty(1, 1024),)) 
-    print()
-
-
 if __name__ == '__main__':
 
     from aihwkit_lightning.nn.conversion import convert_to_analog
-    from aihwkit_lightning.simulator.configs import TorchInferenceRPUConfig
-
-    from aihwkit_lightning.simulator.configs import WeightClipType
-
-    from aihwkit_lightning.simulator.configs import WeightModifierType
+    from aihwkit_lightning.simulator.configs import (
+        TorchInferenceRPUConfig,
+        WeightClipType,
+        WeightNoiseInjectionType,
+    )
 
     from aihwkit_lightning.optim import AnalogOptimizer
 
-    from sklearn.metrics import confusion_matrix
-    import seaborn as sn
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    import matplotlib.colors as mcolors
-    from torchlop import profile
+    # from sklearn.metrics import confusion_matrix
+    # import seaborn as sn
+    # import pandas as pd
+    # import matplotlib.pyplot as plt
+    # import matplotlib.colors as mcolors
+    # from torchlop import profile
 
     rpu_config = TorchInferenceRPUConfig()
     rpu_config.forward.inp_res = 2**8 - 2
@@ -105,7 +85,7 @@ if __name__ == '__main__':
     rpu_config.clip.type = WeightClipType.LAYER_GAUSSIAN_PER_CHANNEL
     rpu_config.clip.sigma = 1.5
 
-    rpu_config.modifier.type = WeightModifierType.ADD_NORMAL_PER_CHANNEL
+    rpu_config.modifier.noise_type = WeightNoiseInjectionType.ADD_NORMAL_PER_CHANNEL
     rpu_config.modifier.std_dev = 0.05
 
     rpu_config.mapping.max_input_size = -1
@@ -118,11 +98,7 @@ if __name__ == '__main__':
     batch_size = 10
     analog_train = True
 
-    testForAmbrogio()
-
-    # trainset = torch.load("dataset/dnpu_measurements/trainset.pt")
-    # testset = torch.load("/dataset/dnpu_measurements/testset_kernel=8_12classes.pt")
-    testset = torch.load("C:/Users/Mohamadreza/OneDrive - University of Twente/Documenten/github/brainspy-tasks/bspytasks/temporal_kernels/GoogleSpeechCommands/dataset/dnpu_measurements/testset_kernel=8_12classes.pt", weights_only=False)
+    testset = torch.load("/mnt/c/Users/moham/OneDrive - University of Twente/Documenten/github/brainspy-tasks/bspytasks/temporal_kernels/GoogleSpeechCommands/dataset/dnpu_measurements/testset_kernel=8_12classes.pt", weights_only=False)
 
     # train_dataloader = torch.utils.data.DataLoader(
     #     dataset=trainset,
@@ -145,7 +121,7 @@ if __name__ == '__main__':
 
     pytorch_model_cpu = pytorch_model.to('cpu')
 
-    macs, params, layer_infos = profile(pytorch_model, inputs=(torch.empty(1, 64, 1984),)) 
+    # macs, params, layer_infos = profile(pytorch_model, inputs=(torch.empty(1, 64, 1984),)) 
     # for layer_name, (layer_mac, layer_params) in layer_infos.items(): 
     #     print(f"{layer_name}: MACs = {layer_mac}, Parameters = {layer_params}")
 
@@ -153,7 +129,8 @@ if __name__ == '__main__':
     # best_model_path = "logs/dnpu_logs/analog_trained/version_31/checkpoints/epoch=242-step=20655.ckpt"
     # best_model_path = "logs/dnpu_logs/analog_trained/version_32/checkpoints/epoch=162-step=13855.ckpt"
     # best_model_path = "logs/dnpu_logs/analog_trained/version_33/checkpoints/epoch=147-step=12580_kernel=8_decay=0-1.ckpt"
-    best_model_path = "logs/dnpu_logs/analog_trained/version_36/checkpoints/epoch=392-step=66417.ckpt"
+    # best_model_path = "logs/dnpu_logs/analog_trained/version_36/checkpoints/epoch=392-step=66417.ckpt"
+    best_model_path = "lightning_logs/version_2/checkpoints/epoch=102-step=2266.ckpt"
 
     checkpoint = torch.load(best_model_path, weights_only=False)
     new_state_dict = {}
@@ -183,29 +160,29 @@ if __name__ == '__main__':
     accuracy = accuracy_metric(all_preds.to('cpu'), all_labels.to('cpu'))
     print(f'Validation Accuracy: {accuracy.item()}')
 
-    print("plotting confusion matrix")
+    # print("plotting confusion matrix")
 
 
-    # plot confusion matrix
-    classes = ['Unknown', 'Down', 'Go', 'Left', 'No', 'Off', 'On', 'Right',
-        'Stop', 'Up', 'Yes', 'House']
-    cf_matrix = confusion_matrix(all_labels.detach().cpu(), all_preds.detach().cpu())
+    # # plot confusion matrix
+    # classes = ['Unknown', 'Down', 'Go', 'Left', 'No', 'Off', 'On', 'Right',
+    #     'Stop', 'Up', 'Yes', 'House']
+    # cf_matrix = confusion_matrix(all_labels.detach().cpu(), all_preds.detach().cpu())
 
-    # normalizing confusion matrix
-    cf_matrix = cf_matrix.astype('float') / cf_matrix.sum(axis=1)[:, np.newaxis]
+    # # normalizing confusion matrix
+    # cf_matrix = cf_matrix.astype('float') / cf_matrix.sum(axis=1)[:, np.newaxis]
 
-    df_cm = pd.DataFrame(cf_matrix / np.sum(cf_matrix, axis=1)[:, None],
-                        index = [i for i in classes],
-                        columns = [i for i in classes])
-    plt.figure();sn.heatmap(df_cm, annot=False, fmt = '.2f', cmap='Blues', norm = mcolors.LogNorm())
-    accuracy_values = np.diag(df_cm)
-    for i in range(len(classes)):
-        plt.text(i + 0.5, i + 0.5, f'{accuracy_values[i]:.2f}', 
-                ha="center", va="center", color="black")
+    # df_cm = pd.DataFrame(cf_matrix / np.sum(cf_matrix, axis=1)[:, None],
+    #                     index = [i for i in classes],
+    #                     columns = [i for i in classes])
+    # plt.figure();sn.heatmap(df_cm, annot=False, fmt = '.2f', cmap='Blues', norm = mcolors.LogNorm())
+    # accuracy_values = np.diag(df_cm)
+    # for i in range(len(classes)):
+    #     plt.text(i + 0.5, i + 0.5, f'{accuracy_values[i]:.2f}', 
+    #             ha="center", va="center", color="black")
 
-    plt.ylabel('True label')
-    plt.xlabel('Predicted label')
-    plt.title('Confusion Matrix with Accuracy')
-    plt.show(block=True)
+    # plt.ylabel('True label')
+    # plt.xlabel('Predicted label')
+    # plt.title('Confusion Matrix with Accuracy')
+    # plt.show(block=True)
 
-    print("")
+    # print("")
