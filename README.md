@@ -15,11 +15,13 @@ This repository presents the codes and materials used for our ***Nature*** publi
 
 ### Dependencies
 
-* You need a python environment with numpy==1.23.X, CUDA>=11.8, aihwkit and some other libraries, such as scipy, tqdam, etc.
+* You need a python environment with numpy==1.23.X, CUDA>=11.8, aihwkit_lightning==0.0.1 and some other libraries, such as scipy, tqdam, etc.
 
 ### Important note
 
 * In order to reproduce the results, you need dataset(s). Please feel free to write to me if you are intrested to have access to both measured data and raw datasets that we used.
+
+* For hardware training, you may face some erros steming from library version mismatches. This code works with aihwkit_lightning==0.0.1 I'm working on it to make the code compatible with the latest version. The code strucutre won't be changed.
 
 ### Installing
 
@@ -29,8 +31,6 @@ This repository presents the codes and materials used for our ***Nature*** publi
 
 * Simply run each file.
 
-## Note
-For hardware training, you may face some erros steming from library version mismatches. I'm working on it to make the code compatible with the latest version. The code strucutre won't be changed.
 
 ## Authors
 
