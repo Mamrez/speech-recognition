@@ -1,5 +1,5 @@
 <figure style="text-align: center;">
-  <img src="docs/cover.jpg" alt="cover" height="500"/>
+  <img src="docs/cover.jpg" alt="cover" height="750"/>
   <figcaption>Figure 1: Overview of the mainstream speech recognition systems.</figcaption>
 </figure>
 
