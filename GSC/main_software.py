@@ -1,4 +1,25 @@
-# from lightning.pytorch.utilities.types import TRAIN_DATALOADERS
+"""
+This script implements a PyTorch Lightning training pipeline for keyword spotting (KWS) using raw audio data.
+It defines two convolutional neural network architectures (M4 and M5), a LightningModule for classification,
+and a LightningDataModule for data loading and preprocessing. The script supports training, validation,
+and model checkpointing, and reports the best validation accuracy after training.
+Key components:
+- M5, M4: 1D convolutional neural network models for audio classification.
+- LitClassifier: PyTorch LightningModule wrapping the model, loss, optimizer, and metrics.
+- LitDataModule: Handles loading, preprocessing, and splitting of the dataset into train/test sets.
+- Training loop: Uses PyTorch Lightning Trainer with callbacks for checkpointing.
+- Model evaluation: Loads the best checkpoint and computes validation accuracy.
+Dependencies:
+- torch, pytorch_lightning, torchmetrics, sklearn, numpy, matplotlib, scipy
+Usage:
+- Configure model and training parameters in the `__main__` section.
+- Run the script to train the model and evaluate its performance.
+Note:
+- The script expects preprocessed numpy arrays for audio data and labels in the specified dataset path.
+- The script supports both full and downsampled audio input.
+"""
+# The above docstring describes the overall purpose, structure, and usage of the script.
+
 import sklearn.preprocessing
 import torch
 import torch.nn as nn
@@ -7,7 +28,6 @@ import os
 import sklearn
 import scipy
 from sklearn import model_selection
-
 
 import matplotlib.pyplot as plt
 import matplotlib
@@ -32,7 +52,7 @@ from pytorch_lightning.loggers import CSVLogger
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class M5(nn.Module):
-    def __init__(self, n_input=1, n_output=12, stride=16, n_channel=32):
+    def __init__(self, n_input=1, n_output=12, stride=16, n_channel=64):
         super().__init__()
         self.conv1 = nn.Conv1d(n_input, n_channel, kernel_size=80, stride=stride)
         self.bn1 = nn.BatchNorm1d(n_channel)
@@ -67,7 +87,7 @@ class M5(nn.Module):
         return F.log_softmax(x, dim=2)
 
 class M4(nn.Module):
-    def __init__(self, n_output, n_channel):
+    def __init__(self, n_output = 12, n_channel = 64):
         super().__init__()
         self.conv2 = nn.Conv1d(1, n_channel, kernel_size=3)
         self.bn2 = nn.BatchNorm1d(n_channel)
@@ -96,7 +116,7 @@ class M4(nn.Module):
         return F.log_softmax(x, dim=2)
 
 class LitClassifier(L.LightningModule):
-    def __init__(self, *args: torch.Any, **kwargs: torch.Any) -> None:
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__()
 
         self.model = kwargs.get('model')
@@ -162,10 +182,7 @@ class LitClassifier(L.LightningModule):
             # a custom logged name
             "name": None,
         }
-
         return [optimizer], [lr_scheduler_config]
-
-        # return optimizer
     
 class LitDataModule(L.LightningDataModule):
     def __init__(self, num_classes, batch_size = 32, num_workers = 2, down_sample = False) -> None:
@@ -176,37 +193,14 @@ class LitDataModule(L.LightningDataModule):
         self.down_sample = down_sample
 
     def prepare_data(self):
-        self.labels_np = np.load("dataset/SUBSET/numpy_audios/labels_np.npy", 
+        self.labels_np = np.load("GSC/datasets/raw_audio_SUBSET/numpy_audios/labels_np.npy", 
                         allow_pickle=True)
-        self.dataset = np.load("dataset/SUBSET/numpy_audios/dataset_np.npy", 
+        self.dataset = np.load("GSC/datasets/raw_audio_SUBSET/numpy_audios/dataset_np.npy", 
                         allow_pickle=True)
         
         if self.down_sample:
             self.dataset = self.dataset[:, 0:7936:16]
-        
-        # The following implementation will produce stratified dataset; in 
-        # AIMC measurement, we do not use this implementation
-        # if self.num_classes == 12:
-        #     # rearanging for KWS task
-        #     for i in range(len(self.labels_np)):
-        #         if self.labels_np[i] not in [4, 8, 11, 14, 15, 16, 18, 22, 26, 28, 10]:
-        #             self.labels_np[i] = 0
-
-        #     self.labels_np[np.where(self.labels_np == 4)] = 1
-        #     self.labels_np[np.where(self.labels_np == 8)] = 2
-        #     self.labels_np[np.where(self.labels_np == 11)] = 3
-        #     self.labels_np[np.where(self.labels_np == 14)] = 4
-        #     self.labels_np[np.where(self.labels_np == 15)] = 5
-        #     self.labels_np[np.where(self.labels_np == 16)] = 6
-        #     self.labels_np[np.where(self.labels_np == 18)] = 7
-        #     self.labels_np[np.where(self.labels_np == 22)] = 8
-        #     self.labels_np[np.where(self.labels_np == 26)] = 9
-        #     self.labels_np[np.where(self.labels_np == 28)] = 10
-        #     self.labels_np[np.where(self.labels_np == 10)] = 11
-
-        # print("")
-
-        
+                
     def setup(self, stage = None):
         train_data, test_data, train_label, test_label = sklearn.model_selection.train_test_split(
             self.dataset,
@@ -266,7 +260,7 @@ class LitDataModule(L.LightningDataModule):
             torch_targets_train[i] = train_label[i]
         self.trainset = torch.utils.data.TensorDataset(torch_data_train, torch_targets_train)
     
-    def train_dataloader(self) -> torch.Any:
+    def train_dataloader(self):
         return DataLoader(
             dataset=self.trainset,
             batch_size = self.batch_size,
@@ -276,7 +270,7 @@ class LitDataModule(L.LightningDataModule):
             persistent_workers=True
         )
     
-    def val_dataloader(self) -> torch.Any:
+    def val_dataloader(self):
         return DataLoader(
             dataset=self.testset,
             batch_size = self.batch_size,
@@ -294,21 +288,25 @@ if __name__ == '__main__':
     num_classes = 12
     batch_size = 32
 
-    pytorch_model = M4(
-        n_output=num_classes,
-        n_channel=64
-    )
+    # Choose model name here to reproduce accuracy results on raw audio dataset
+    model_name = "M5"  # "M4" or "M5"
 
-    pytorch_model = M5(
-        n_input     = 1,
-        n_output    = num_classes,
-        n_channel   = 64
-    )
+    pytorch_model = \
+        M4(
+            n_output    = num_classes,
+            n_channel   = 64
+        ) \
+        if model_name == "M4" else \
+        M5(
+            n_input     = 1,
+            n_output    = num_classes,
+            n_channel   = 64
+        )
 
-
+    # Here you can check the MACs and parameters of the model
     macs, params, layer_infos = profile(pytorch_model, inputs=(torch.empty(1, 8000),)) 
-    for layer_name, (layer_mac, layer_params) in layer_infos.items(): 
-        print(f"{layer_name}: MACs = {layer_mac}, Parameters = {layer_params}")
+    # for layer_name, (layer_mac, layer_params) in layer_infos.items(): 
+    #     print(f"{layer_name}: MACs = {layer_mac}, Parameters = {layer_params}")
 
 
     datamodule = LitDataModule(
