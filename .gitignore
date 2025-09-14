@@ -1,10 +1,10 @@
 /empty
 /empty/*
 
-lightning_logs/
-/lightning_logs/
-lightning_logs/*
-
+logs
+/logs/*
+/logs/
+/logs
 
 TI46/datasets/*
 TI46/lightning_logs
@@ -13,9 +13,11 @@ TI46/lightning_logs/*
 GSC/datasets
 GSC/datasets/*
 GSC/lightning_logs
+GSC/lightning_logs/
 GSC/lightning_logs/*
 
 GSC/logs
+GSC/logs/
 GSC/logs/*
 
 lightning_logs/
