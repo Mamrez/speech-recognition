@@ -12,3 +12,9 @@ GSC/lightning_logs/*
 
 GSC/logs
 GSC/logs/*
+
+lightning_logs/
+lightning_logs/*
+/lightning_logs
+/lightning_logs/*
+/lightning_logs/
