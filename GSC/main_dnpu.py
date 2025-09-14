@@ -1,4 +1,3 @@
-# from lightning.pytorch.utilities.types import TRAIN_DATALOADERS
 import sklearn.preprocessing
 import torch
 import torch.nn as nn
@@ -13,11 +12,6 @@ from torch.utils.data import DataLoader, Dataset, random_split
 
 from sklearn.preprocessing import LabelEncoder
 
-# import librosa
-# import matplotlib.pyplot as plt
-
-# import matplotlib.pyplot as plt
-# import IPython.display as ipd
 import numpy as np
 
 from tqdm import tqdm
@@ -60,7 +54,7 @@ class M3(nn.Module):
         # self.fc2 = nn.Linear(n_channel, n_output)
 
     def forward(self, x):
-        x = self.layer_norm(x)
+        x = self.layer_norm(x[:,:,::4])
         x = self.pool1(x)
         x = self.conv2(x)
         x = F.tanh(self.bn2(x))
@@ -105,7 +99,7 @@ class M4(nn.Module):
         # self.fc2 = nn.Linear(n_channel, n_output)
 
     def forward(self, x):
-        x = self.layer_norm(x)
+        x = self.layer_norm(x[:,:,::4])
         x = self.pool1(x)
         x = self.conv2(x)
         x = F.relu(self.bn2(x))
@@ -126,50 +120,6 @@ class M4(nn.Module):
         # x = F.tanh(self.fc1(x))
         x = self.fc1(x)
         return F.log_softmax(x, dim=2)
-
-# class M4(nn.Module):
-#     def __init__(self, n_output, n_channel):
-#         super().__init__()
-#         self.layer_norm = nn.BatchNorm1d(n_channel)
-#         self.conv2 = nn.Conv1d(n_channel, n_channel, kernel_size=8)
-#         self.bn2 = nn.BatchNorm1d(n_channel)
-#         self.pool2 = nn.MaxPool1d(4)
-#         self.conv3 = nn.Conv1d(n_channel, 4 * n_channel, kernel_size=3)
-#         self.bn3 = nn.BatchNorm1d(4 * n_channel)
-#         self.pool3 = nn.MaxPool1d(4)
-#         self.conv4 = nn.Conv1d(4 * n_channel, 4 * n_channel, kernel_size=3)
-#         self.bn4 = nn.BatchNorm1d(4 * n_channel)
-#         self.pool4 = nn.MaxPool1d(4)
-
-#         self.conv_ext = nn.Conv1d(4 * n_channel, 4 * n_channel, kernel_size=3)
-#         self.bn_ext = nn.BatchNorm1d(4 * n_channel)
-#         self.pool_ext = nn.MaxPool1d(4)
-
-#         self.fc1 = nn.Linear(4 * n_channel, n_channel)
-#         self.fc2 = nn.Linear(n_channel, n_output)
-
-#     def forward(self, x):
-#         x = self.layer_norm(x)
-
-#         x = self.conv2(x)
-#         x = F.tanh(self.bn2(x))
-#         x = self.pool2(x)
-#         x = self.conv3(x)
-#         x = F.tanh(self.bn3(x))
-#         x = self.pool3(x)
-#         x = self.conv4(x)
-#         x = F.tanh(self.bn4(x))
-#         x = self.pool4(x)
-
-#         x = self.conv_ext(x)
-#         x = F.tanh(self.bn_ext(x))
-#         x = self.pool_ext(x)
-
-#         x = F.avg_pool1d(x, x.shape[-1])
-#         x = x.permute(0, 2, 1)
-#         x = F.tanh(self.fc1(x))
-#         x = self.fc2(x)
-#         return F.log_softmax(x, dim=2)
 
 class LitClassifier(L.LightningModule):
     def __init__(self, *args, **kwargs) -> None:
@@ -240,8 +190,6 @@ class LitClassifier(L.LightningModule):
         }
 
         return [optimizer], [lr_scheduler_config]
-
-        # return optimizer
     
 class LitDataModule(L.LightningDataModule):
     def __init__(self, num_classes, batch_size = 32, num_workers = 2) -> None:
@@ -251,26 +199,11 @@ class LitDataModule(L.LightningDataModule):
         self.num_workers = num_workers
 
     def prepare_data(self):
-        # self.trainset = torch.load("dataset/dnpu_measurements/trainset_kernel=8.pt")
-        # self.testset = torch.load("dataset/dnpu_measurements/testset_kernel=8.pt")
-        self.trainset = torch.load("dataset/dnpu_measurements/trainset.pt", weights_only=False)
-        self.testset = torch.load("dataset/dnpu_measurements/testset.pt", weights_only=False)
+        self.trainset = torch.load("GSC/datasets/dnpu_measurements/trainset_kernel=8_12classes.pt", weights_only=False)
+        self.testset = torch.load("GSC/datasets/dnpu_measurements/testset_kernel=8_12classes.pt", weights_only=False)
         
     def setup(self, stage = None):
-        le = LabelEncoder()
-        for i in range(len(self.trainset)):
-            if self.trainset[:][1][i] not in [4, 8, 11, 14, 15, 16, 18, 22, 26, 28, 10]:
-                self.trainset[:][1][i] = 0
-        le.fit(np.asarray(self.trainset[:][1][:]))
-        self.trainset[:][1][:] = torch.Tensor(le.transform(np.asarray(self.trainset[:][1][:])))
-
-        for j in range(len(self.testset)):
-            if self.testset[:][1][j] not in [4, 8, 11, 14, 15, 16, 18, 22, 26, 28, 10]:
-                self.testset[:][1][j] = 0
-        le.fit(np.asarray(self.testset[:][1][:]))
-        self.testset[:][1][:] = torch.Tensor(le.transform(np.asarray(self.testset[:][1][:])))
-
-        print("")
+        pass
         
     def train_dataloader(self):
         return DataLoader(
@@ -292,8 +225,6 @@ class LitDataModule(L.LightningDataModule):
             persistent_workers=True
         )
 
-
-
 if __name__ == '__main__':
 
     from pytorch_lightning.callbacks import ModelCheckpoint
@@ -307,16 +238,19 @@ if __name__ == '__main__':
     num_classes = 12
     batch_size = 64
 
-    pytorch_model = M3(
-        n_output    = num_classes,
-        n_channel   = 64
-    )
+    # Choose model name here to reproduce accuracy results on raw audio dataset
+    model_name = "M3"  # "M3" or "M4"
 
-    # pytorch_model = M4(
-    #     n_output    = num_classes,
-    #     n_channel   = 64
-    # )
-
+    pytorch_model = \
+        M3(
+            n_output    = num_classes,
+            n_channel   = 64
+        ) \
+        if model_name == "M3" else \
+        M4(
+            n_output    = num_classes,
+            n_channel   = 64
+        )
 
     macs, params, layer_infos = profile(pytorch_model, inputs=(torch.empty(1, 64, 496),)) 
     # for layer_name, (layer_mac, layer_params) in layer_infos.items(): 
@@ -385,5 +319,3 @@ if __name__ == '__main__':
     df_cm = pd.DataFrame(cf_matrix / np.sum(cf_matrix, axis=1)[:, None], index = [i for i in classes],
                      columns = [i for i in classes])
     plt.figure();sn.heatmap(df_cm, annot=True);plt.show(block=True)
-
-
