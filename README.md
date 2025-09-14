@@ -21,7 +21,7 @@ This repository presents the codes and materials used for our ***Nature*** publi
 
 * In order to reproduce the results, you need dataset(s). Please feel free to write to me if you are intrested to have access to both measured data and raw datasets that we used.
 
-* For hardware training, you may face some erros steming from library version mismatches. This code works with aihwkit_lightning==0.0.1 I'm working on it to make the code compatible with the latest version. The code strucutre won't be changed.
+* For hardware training, you may face some erros steming from library version mismatches. The code on main works with aihwkit_lightning==0.0.1. In dev branch, I fixed the code to work with the latest version of aihwkit_lightning.
 
 ### Installing
 
@@ -40,4 +40,7 @@ Mohamadreza Zolfagharinejad -- University of Twente
 ## Version History
 
 * 0.1
-    * Initial release; compatible with aihwkit_lightning==0.0.1
+    * Initial release; compatible with aihwkit_lightning==0.0.1 -> main branch
+
+* 2.0
+    * Latest release: compatible with the latest version of aihwkit_lightning -> dev branch.
